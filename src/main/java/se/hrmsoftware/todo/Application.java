@@ -1,25 +1,35 @@
 package se.hrmsoftware.todo;
 
+import com.google.gson.Gson;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import spark.ModelAndView;
+import spark.ExceptionHandler;
+import spark.Request;
+import spark.Response;
+import spark.ResponseTransformer;
+import spark.Spark;
 import spark.SparkBase;
-import spark.template.velocity.VelocityTemplateEngine;
 
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 
 import static java.lang.Integer.valueOf;
 import static java.lang.System.getProperty;
+import static spark.Spark.after;
+import static spark.Spark.delete;
+import static spark.Spark.exception;
 import static spark.Spark.get;
-import static spark.Spark.setPort;
+import static spark.Spark.post;
 
 /**
  * The main application.
  */
 public class Application {
 	private static final Logger LOG = LoggerFactory.getLogger(Application.class);
+	private static Todos TODOS = new InMemoryTodos();
+	private static Gson GSON = new Gson();
 
 	/**
 	 * This bootstraps the application.
@@ -35,9 +45,51 @@ public class Application {
 	 * The routes (REST-style) of the application.
 	 */
 	private static void registerRoutes() {
-		get("/", (request, response) ->
-				new ModelAndView(new HashMap<String, String>(), "views/layout.vm"), new VelocityTemplateEngine());
-		// get("/", "application/json", (req, resp) -> Arrays.asList("1", "2", "3"), o -> ""+o);
+		get("/", (req, resp) ->
+						TODOS.lists(),
+				jsonTransformer());
+		post("/", (req, resp) ->
+						TODOS.createList(req.body()),
+				jsonTransformer());
+
+		get("/:list", (req, resp) ->
+						TODOS.todosFor(req.params(":list"))
+								.orElseThrow(() -> new RuntimeException("No such list")),
+				jsonTransformer());
+		post("/:list", (req, resp) ->
+						TODOS.addTodo(req.params(":list"), req.body()),
+				jsonTransformer());
+
+		delete("/:list/:id", (req, resp) -> {
+					if (!TODOS.removeTodo(req.params(":list"), req.params(":id"))) {
+						throw new RuntimeException("No such todo!");
+					}
+					return TODOS.todosFor(req.params(":list"))
+							.orElseThrow(() -> new RuntimeException("No such list"));
+				},
+				jsonTransformer());
+
+		exception(Exception.class, new ExceptionHandler() {
+			@Override
+			public void handle(Exception e, Request request, Response response) {
+				Map<String, Object> msg = new HashMap<>();
+				msg.put("type", e.getClass().getSimpleName());
+				msg.put("message", e.getMessage());
+				response.status(500);
+				try {
+					response.body(jsonTransformer().render(msg));
+				}
+				catch (Exception e1) {
+					throw new RuntimeException(e1);
+				}
+			}
+		});
+		after("*", (req, resp) -> resp.type("application/json"));
+	}
+
+
+	private static ResponseTransformer jsonTransformer() {
+		return GSON::toJson;
 	}
 
 
@@ -50,7 +102,7 @@ public class Application {
 			LOG.info("Overriding default port with {}", s);
 			return valueOf(s);
 		};
-		setPort(Optional.ofNullable(getProperty("port")).map(portFun).orElse(defaultPort));
+		Spark.port(Optional.ofNullable(getProperty("port")).map(portFun).orElse(defaultPort));
 	}
 
 	/**
