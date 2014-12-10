@@ -36,11 +36,6 @@ public class InMemoryTodos implements Todos {
 	}
 
 	@Override
-	public boolean removeList(String name) {
-		return storage.remove(name) != null;
-	}
-
-	@Override
 	public Todo addTodo(String list, String todoText) {
 		return ofNullable(storage.get(list))
 				.map((e) -> e.add(todoText)) // Ugly side-effect ..

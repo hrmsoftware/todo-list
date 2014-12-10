@@ -13,8 +13,6 @@ public interface Todos {
 
 	TodoList createList(String name);
 
-	boolean removeList(String name);
-
 	Todo addTodo(String list, String todoText);
 
 	boolean removeTodo(String list, String todoId);
