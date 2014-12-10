@@ -9,6 +9,7 @@ import spark.Response;
 import spark.ResponseTransformer;
 import spark.Spark;
 import spark.SparkBase;
+import spark.utils.IOUtils;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -17,7 +18,7 @@ import java.util.function.Function;
 
 import static java.lang.Integer.valueOf;
 import static java.lang.System.getProperty;
-import static spark.Spark.after;
+import static spark.Spark.before;
 import static spark.Spark.delete;
 import static spark.Spark.exception;
 import static spark.Spark.get;
@@ -45,9 +46,19 @@ public class Application {
 	 * The routes (REST-style) of the application.
 	 */
 	private static void registerRoutes() {
+
+		before((request, response) -> response.type("application/json"));
+
 		get("/", (req, resp) ->
 						TODOS.lists(),
 				jsonTransformer());
+
+		// Load the index.html
+		get("/html", (req, resp) -> {
+			resp.type("text/html");
+			return IOUtils.toString(Application.class.getResourceAsStream("/views/index.html"));
+		});
+
 		post("/", (req, resp) ->
 						TODOS.createList(req.body()),
 				jsonTransformer());
@@ -84,7 +95,6 @@ public class Application {
 				}
 			}
 		});
-		after("*", (req, resp) -> resp.type("application/json"));
 	}
 
 
