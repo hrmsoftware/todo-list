@@ -1,8 +1,11 @@
 <!doctype html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <script src="http://ajax.googleapis.com/ajax/libs/jquery/1/jquery.min.js"></script>
     <script>
+
+var currentList = "";
 
 // Adds a new list
 var addList = function(listName) {
@@ -15,11 +18,34 @@ var loadLists = function() {
     $.get("/", function(data) {
         // Add items.
         data.forEach(function(e) {
-            var elm = $("<li><a href=\"#\">"+e.name+" </a>"+(e.size)+"</li>");
+            var elm = $("<li><a href=\"#\" onclick=\"loadTodos('"+e.name+"');\">"+e.name+" </a>"+(e.size)+"</li>");
             elm.appendTo("#lists");
         });
     });
 }
+
+// Load all TODOs for a list.
+var loadTodos = function(listName) {
+   $("#todos li").remove();
+   $.get("/"+listName, function(data) {
+       currentList = listName;
+       $("#listName").html(currentList);
+       data.forEach(function(e){
+           var elm = $("<li><a href=\"#\">"+e.text+"</a></li>");
+           elm.appendTo("#todos");
+       });
+   });
+}
+
+var addTodo = function(text) {
+    var theList = currentList;
+    $.post("/"+currentList, text, function(d) {
+        loadLists();
+        loadTodos(theList);
+    });
+}
+
+// Load lists when the page loads.
 $(document).ready(function () {
     loadLists();
 });
@@ -37,18 +63,20 @@ $(document).ready(function () {
             <button onclick="loadLists();">Refresh</button>
         </div>
         <ul id="lists">
-            <li><a class="active" href="#">Foo</a></li>
-            <li><a href="#">Bar</a></li>
-            <li><a href="#">Zip</a></li>
         </ul>
         <div id="raw"></div>
     </div>
     <div id="main">
-        <h2>Items in listName .. there</h2>
-        <ul>
-            <li><a class="active" href="#">asdfkljhasdf lkjasdf</a></li>
-            <li><a href="#">asdfklj hlaskdfjhasdl </a></li>
-            <li><a href="#">asdflkjh alskjfhasdl f</a></li>
+        <h2>Items</h2>
+
+        <h3 id="listName"></h3>
+
+        <div>
+            <input id="newTodoField" type="text" name="newTodo"/>
+            <button onclick='addTodo($("#newTodoField").val()); $("#newTodoField").val("");'>Add</button>
+        </div>
+        <ul id="todos">
+            <li>.. no list selected ..</li>
         </ul>
     </div>
 </div>

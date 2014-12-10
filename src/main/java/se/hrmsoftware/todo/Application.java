@@ -46,8 +46,7 @@ public class Application {
 	 * The routes (REST-style) of the application.
 	 */
 	private static void registerRoutes() {
-
-		before((request, response) -> response.type("application/json"));
+		before((request, response) -> response.type("application/json; charset=UTF-8"));
 
 		get("/", (req, resp) ->
 						TODOS.lists(),
