@@ -1,14 +1,56 @@
 <!doctype html>
-<html ng-app>
+<html>
 <head>
-    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.6/angular.min.js"></script>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1/jquery.min.js"></script>
+    <script>
+
+// Adds a new list
+var addList = function(listName) {
+    $.post("/", listName, loadLists);
+}
+
+// Load all lists.
+var loadLists = function() {
+    $("#lists li").remove();
+    $.get("/", function(data) {
+        // Add items.
+        data.forEach(function(e) {
+            var elm = $("<li><a href=\"#\">"+e.name+" </a>"+(e.size)+"</li>");
+            elm.appendTo("#lists");
+        });
+    });
+}
+$(document).ready(function () {
+    loadLists();
+});
+
+    </script>
 </head>
 <body>
 <div>
-    <label>Name:</label>
-    <input type="text" ng-model="yourName" placeholder="Enter a name here">
-    <hr>
-    <h1>Hello {{yourName}}!</h1>
+    <div id="menu">
+        <h2>Lists</h2>
+
+        <div>
+            <input id="newListField" type="text" name="newList"/>
+            <button onclick='addList($("#newListField").val()); $("#newListField").val("");'>Add</button>
+            <button onclick="loadLists();">Refresh</button>
+        </div>
+        <ul id="lists">
+            <li><a class="active" href="#">Foo</a></li>
+            <li><a href="#">Bar</a></li>
+            <li><a href="#">Zip</a></li>
+        </ul>
+        <div id="raw"></div>
+    </div>
+    <div id="main">
+        <h2>Items in listName .. there</h2>
+        <ul>
+            <li><a class="active" href="#">asdfkljhasdf lkjasdf</a></li>
+            <li><a href="#">asdfklj hlaskdfjhasdl </a></li>
+            <li><a href="#">asdflkjh alskjfhasdl f</a></li>
+        </ul>
+    </div>
 </div>
 </body>
 </html>
