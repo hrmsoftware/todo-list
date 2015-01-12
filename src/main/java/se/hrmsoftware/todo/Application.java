@@ -1,6 +1,20 @@
 package se.hrmsoftware.todo;
 
 import com.google.gson.Gson;
+import com.sun.xml.internal.bind.v2.TODO;
+
+import org.axonframework.commandhandling.CommandBus;
+import org.axonframework.commandhandling.SimpleCommandBus;
+import org.axonframework.commandhandling.annotation.AggregateAnnotationCommandHandler;
+import org.axonframework.commandhandling.gateway.CommandGateway;
+import org.axonframework.commandhandling.gateway.DefaultCommandGateway;
+import org.axonframework.eventhandling.EventBus;
+import org.axonframework.eventhandling.SimpleEventBus;
+import org.axonframework.eventhandling.annotation.AnnotationEventListenerAdapter;
+import org.axonframework.eventsourcing.EventSourcingRepository;
+import org.axonframework.eventstore.EventStore;
+import org.axonframework.eventstore.fs.FileSystemEventStore;
+import org.axonframework.eventstore.fs.SimpleEventFileResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import spark.ExceptionHandler;
@@ -11,10 +25,13 @@ import spark.Spark;
 import spark.SparkBase;
 import spark.utils.IOUtils;
 
+import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
+
+import se.hrmsoftware.todo.model.todoitem.TodoItem;
 
 import static java.lang.Integer.valueOf;
 import static java.lang.System.getProperty;
@@ -29,7 +46,7 @@ import static spark.Spark.post;
  */
 public class Application {
 	private static final Logger LOG = LoggerFactory.getLogger(Application.class);
-	private static Todos TODOS = new InMemoryTodos();
+	private static Todos TODOS;
 	private static Gson GSON = new Gson();
 
 	/**
@@ -37,6 +54,7 @@ public class Application {
 	 * @param args .
 	 */
 	public static void main(String[] args) {
+		setupAxon();
 		assignServerPort(7777);
 		registerShutdownHook(SparkBase::stop);
 		registerRoutes();
@@ -100,7 +118,6 @@ public class Application {
 		});
 	}
 
-
 	private static ResponseTransformer jsonTransformer() {
 		return GSON::toJson;
 	}
@@ -118,10 +135,27 @@ public class Application {
 		Spark.port(Optional.ofNullable(getProperty("port")).map(portFun).orElse(defaultPort));
 	}
 
+
 	/**
 	 * @param hook some code that will be run when the application shuts down.
 	 */
 	private static void registerShutdownHook(Runnable hook) {
 		Runtime.getRuntime().addShutdownHook(new Thread(hook));
+	}
+
+	/**
+	 * Setup the Axon Framework
+	 */
+	private static void setupAxon() {
+		CommandBus commandBus = new SimpleCommandBus();
+		CommandGateway commandGateway = new DefaultCommandGateway(commandBus);
+		EventStore eventStore = new FileSystemEventStore(new SimpleEventFileResolver(new File("target/events")));
+		EventBus eventBus = new SimpleEventBus();
+		EventSourcingRepository<TodoItem> repository = new EventSourcingRepository<>(TodoItem.class, eventStore);
+		repository.setEventBus(eventBus);
+
+		AggregateAnnotationCommandHandler.subscribe(TodoItem.class, repository, commandBus);
+		TODOS = new AxonTodos(commandGateway);
+		AnnotationEventListenerAdapter.subscribe(TODOS, eventBus);
 	}
 }
