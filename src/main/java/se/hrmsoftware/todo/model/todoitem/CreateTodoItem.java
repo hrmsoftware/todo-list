@@ -9,6 +9,9 @@ public class CreateTodoItem {
 	private final String todo;
 
 	public CreateTodoItem(String id, String listName, String todo) {
+		isValid(id);
+		isValid(listName);
+		isValid(todo);
 		this.id = id;
 		this.listName = listName;
 		this.todo = todo;
@@ -24,5 +27,11 @@ public class CreateTodoItem {
 
 	public String getTodo() {
 		return todo;
+	}
+
+	private static void isValid(String str) {
+		if(str == null || str.isEmpty()) {
+			throw new IllegalArgumentException("value may not be null or empty");
+		}
 	}
 }

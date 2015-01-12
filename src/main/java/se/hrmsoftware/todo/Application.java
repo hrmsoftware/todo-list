@@ -1,13 +1,17 @@
 package se.hrmsoftware.todo;
 
-import com.google.gson.Gson;
-import com.sun.xml.internal.bind.v2.TODO;
+import java.io.File;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.Function;
 
 import org.axonframework.commandhandling.CommandBus;
 import org.axonframework.commandhandling.SimpleCommandBus;
 import org.axonframework.commandhandling.annotation.AggregateAnnotationCommandHandler;
 import org.axonframework.commandhandling.gateway.CommandGateway;
 import org.axonframework.commandhandling.gateway.DefaultCommandGateway;
+import org.axonframework.domain.DomainEventStream;
 import org.axonframework.eventhandling.EventBus;
 import org.axonframework.eventhandling.SimpleEventBus;
 import org.axonframework.eventhandling.annotation.AnnotationEventListenerAdapter;
@@ -25,21 +29,13 @@ import spark.Spark;
 import spark.SparkBase;
 import spark.utils.IOUtils;
 
-import java.io.File;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.function.Function;
-
 import se.hrmsoftware.todo.model.todoitem.TodoItem;
+
+import com.google.gson.Gson;
 
 import static java.lang.Integer.valueOf;
 import static java.lang.System.getProperty;
-import static spark.Spark.before;
-import static spark.Spark.delete;
-import static spark.Spark.exception;
-import static spark.Spark.get;
-import static spark.Spark.post;
+import static spark.Spark.*;
 
 /**
  * The main application.
@@ -149,13 +145,31 @@ public class Application {
 	private static void setupAxon() {
 		CommandBus commandBus = new SimpleCommandBus();
 		CommandGateway commandGateway = new DefaultCommandGateway(commandBus);
-		EventStore eventStore = new FileSystemEventStore(new SimpleEventFileResolver(new File("target/events")));
+
+		final File eventDirectory = new File("target/events");
+		EventStore eventStore = new FileSystemEventStore(new SimpleEventFileResolver(eventDirectory));
+
 		EventBus eventBus = new SimpleEventBus();
 		EventSourcingRepository<TodoItem> repository = new EventSourcingRepository<>(TodoItem.class, eventStore);
 		repository.setEventBus(eventBus);
 
 		AggregateAnnotationCommandHandler.subscribe(TodoItem.class, repository, commandBus);
-		TODOS = new AxonTodos(commandGateway);
+		AxonTodos axonTodos = new AxonTodos(commandGateway);
+		TODOS = axonTodos;
 		AnnotationEventListenerAdapter.subscribe(TODOS, eventBus);
+
+		replayEvents(eventDirectory, eventStore, axonTodos);
+	}
+
+	private static void replayEvents(File eventDirectory, EventStore eventStore, AxonTodos axonTodos) {
+		// hack to replay events from the event store
+		AnnotationEventListenerAdapter todoEventHandler = new AnnotationEventListenerAdapter(axonTodos);
+		for(String file : new File(eventDirectory, TodoItem.class.getSimpleName()).list()) {
+			DomainEventStream stream = eventStore.readEvents(TodoItem.class.getSimpleName(),
+					file.substring(0, file.lastIndexOf('.')));
+			while(stream.hasNext()) {
+				todoEventHandler.handle(stream.next());
+			}
+		}
 	}
 }

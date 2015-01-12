@@ -1,7 +1,6 @@
 package se.hrmsoftware.todo;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -11,9 +10,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.axonframework.commandhandling.gateway.CommandGateway;
 import org.axonframework.eventhandling.annotation.EventHandler;
-import org.axonframework.eventhandling.replay.ReplayAware;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import se.hrmsoftware.todo.model.Todo;
 import se.hrmsoftware.todo.model.TodoList;
@@ -22,9 +18,7 @@ import se.hrmsoftware.todo.model.todoitem.CreateTodoItem;
 import se.hrmsoftware.todo.model.todoitem.TodoItemCompleted;
 import se.hrmsoftware.todo.model.todoitem.TodoItemCreated;
 
-public class AxonTodos implements Todos, ReplayAware {
-	private static final Logger LOG = LoggerFactory.getLogger(AxonTodos.class);
-
+public class AxonTodos implements Todos {
 	private final CommandGateway commandGateway;
 
 	private final Map<String, List<Todo>> todos = new ConcurrentHashMap<>();
@@ -81,34 +75,5 @@ public class AxonTodos implements Todos, ReplayAware {
 			entry.getValue().stream().filter(item -> item.getId().equals(event.getId())).findFirst().map(
 					entry.getValue()::remove);
 		}
-	}
-
-	private Optional<String> listByTodoId(String id) {
-		for (Map.Entry<String, List<Todo>> entry : todos.entrySet()) {
-			if (entry.getValue().stream().filter(item -> item.getId().equals(id)).findFirst().isPresent()) {
-				return Optional.of(entry.getKey());
-			}
-		}
-		return Optional.empty();
-	}
-
-	private Optional<Todo> todoById(TodoItemCompleted event) {
-		return todos.values().stream().flatMap(Collection::stream).filter(item -> item.getId().equals(event.getId())).findFirst();
-	}
-
-	@Override
-	public void beforeReplay() {
-		LOG.debug("Clearing query model for replay");
-		todos.clear();
-	}
-
-	@Override
-	public void afterReplay() {
-		LOG.debug("Replay done");
-	}
-
-	@Override
-	public void onReplayFailed(Throwable cause) {
-		LOG.error("Could not recreate query model", cause);
 	}
 }
