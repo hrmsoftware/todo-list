@@ -37,16 +37,25 @@ var loadTodos = function(listName) {
    });
 }
 
+var loadStatistics = function() {
+    $.get("/stats", function(data) {
+        $("#totalCreated").html("Total created: "+data.totalCreated);
+        $("#totalCompleted").html("Total completed: "+data.totalCompleted);
+    });
+}
+
 var addTodo = function(text) {
     var theList = currentList;
     $.post("/"+currentList, text, function(d) {
         loadLists();
+        loadStatistics();
         loadTodos(theList);
     });
 }
 
 // Load lists when the page loads.
 $(document).ready(function () {
+    loadStatistics();
     loadLists();
 });
 
@@ -55,6 +64,11 @@ $(document).ready(function () {
 <body>
 <div>
     <div id="menu">
+        <h2>Statistics</h2>
+        <ul>
+            <li id="totalCreated">Total created: 0</li>
+            <li id="totalCompleted">Total completed: 0</li>
+        </ul>
         <h2>Lists</h2>
 
         <div>

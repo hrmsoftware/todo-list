@@ -53,15 +53,16 @@ public class AxonTodos implements Todos {
 	}
 
 	@Override
-	public boolean removeTodo(String list, String todoId) {
-		Optional<Todo> todo = todosFor(list).map(l -> l.stream().filter(item -> item.getId().equals(todoId)).findFirst().get());
+	public boolean removeTodo(final String list, final String todoId) {
+		Optional<Todo> todo = todosFor(list).map(l -> l.stream().filter(item -> item.getId().equals(todoId)).findFirst().orElse(null));
 		todo.ifPresent(item -> commandGateway.send(new CompleteTodoItem(todoId)));
 		return todo.isPresent();
 	}
 
 	@EventHandler
-	public void on(TodoItemCreated event) {
+	public synchronized void on(TodoItemCreated event) {
 		List<Todo> todosForList = todos.get(event.getList());
+
 		if (todosForList == null) {
 			todosForList = new CopyOnWriteArrayList<>();
 			todos.put(event.getList(), todosForList);

@@ -11,6 +11,7 @@ import org.axonframework.commandhandling.SimpleCommandBus;
 import org.axonframework.commandhandling.annotation.AggregateAnnotationCommandHandler;
 import org.axonframework.commandhandling.gateway.CommandGateway;
 import org.axonframework.commandhandling.gateway.DefaultCommandGateway;
+import org.axonframework.domain.DomainEventMessage;
 import org.axonframework.domain.DomainEventStream;
 import org.axonframework.eventhandling.EventBus;
 import org.axonframework.eventhandling.SimpleEventBus;
@@ -21,9 +22,6 @@ import org.axonframework.eventstore.fs.FileSystemEventStore;
 import org.axonframework.eventstore.fs.SimpleEventFileResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import spark.ExceptionHandler;
-import spark.Request;
-import spark.Response;
 import spark.ResponseTransformer;
 import spark.Spark;
 import spark.SparkBase;
@@ -35,6 +33,7 @@ import com.google.gson.Gson;
 
 import static java.lang.Integer.valueOf;
 import static java.lang.System.getProperty;
+import static java.util.Arrays.asList;
 import static spark.Spark.*;
 
 /**
@@ -43,6 +42,7 @@ import static spark.Spark.*;
 public class Application {
 	private static final Logger LOG = LoggerFactory.getLogger(Application.class);
 	private static Todos TODOS;
+	private static TodoStatistics STATISTICS;
 	private static Gson GSON = new Gson();
 
 	/**
@@ -76,6 +76,10 @@ public class Application {
 			return IOUtils.toString(Application.class.getResourceAsStream("/views/index.html"));
 		});
 
+		get("/stats", (req, resp) ->
+						STATISTICS.get(),
+				jsonTransformer());
+
 		post("/", (req, resp) ->
 						TODOS.createList(req.body()),
 				jsonTransformer());
@@ -97,19 +101,16 @@ public class Application {
 				},
 				jsonTransformer());
 
-		exception(Exception.class, new ExceptionHandler() {
-			@Override
-			public void handle(Exception e, Request request, Response response) {
-				Map<String, Object> msg = new HashMap<>();
-				msg.put("type", e.getClass().getSimpleName());
-				msg.put("message", e.getMessage());
-				response.status(500);
-				try {
-					response.body(jsonTransformer().render(msg));
-				}
-				catch (Exception e1) {
-					throw new RuntimeException(e1);
-				}
+		exception(Exception.class, (e, request, response) -> {
+			Map<String, Object> msg = new HashMap<>();
+			msg.put("type", e.getClass().getSimpleName());
+			msg.put("message", e.getMessage());
+			response.status(500);
+			try {
+				response.body(jsonTransformer().render(msg));
+			}
+			catch (Exception e1) {
+				throw new RuntimeException(e1);
 			}
 		});
 	}
@@ -158,17 +159,38 @@ public class Application {
 		TODOS = axonTodos;
 		AnnotationEventListenerAdapter.subscribe(TODOS, eventBus);
 
-		replayEvents(eventDirectory, eventStore, axonTodos);
+		STATISTICS = new TodoStatistics();
+		AnnotationEventListenerAdapter.subscribe(STATISTICS, eventBus);
+
+		replayEvents(eventDirectory, eventStore, axonTodos, STATISTICS);
 	}
 
-	private static void replayEvents(File eventDirectory, EventStore eventStore, AxonTodos axonTodos) {
-		// hack to replay events from the event store
-		AnnotationEventListenerAdapter todoEventHandler = new AnnotationEventListenerAdapter(axonTodos);
-		for(String file : new File(eventDirectory, TodoItem.class.getSimpleName()).list()) {
-			DomainEventStream stream = eventStore.readEvents(TodoItem.class.getSimpleName(),
-					file.substring(0, file.lastIndexOf('.')));
-			while(stream.hasNext()) {
-				todoEventHandler.handle(stream.next());
+	private static void replayEvents(File eventDirectory, EventStore eventStore, Object... eventHandlers) {
+		new FileEventReplayer(eventDirectory, eventStore).replayEvents(eventHandlers);
+	}
+
+	public static class FileEventReplayer {
+		private final File eventDirectory;
+		private final EventStore eventStore;
+
+		public FileEventReplayer(File eventDirectory, EventStore eventStore) {
+			this.eventDirectory = eventDirectory;
+			this.eventStore = eventStore;
+		}
+
+		public void replayEvents(Object... eventHandlers) {
+			// hack to replay events from the event store
+			AnnotationEventListenerAdapter[] adapters = asList(eventHandlers).stream().map(AnnotationEventListenerAdapter::new).toArray(AnnotationEventListenerAdapter[]::new);
+
+			for (String file : new File(eventDirectory, TodoItem.class.getSimpleName()).list()) {
+				DomainEventStream stream = eventStore.readEvents(TodoItem.class.getSimpleName(),
+						file.substring(0, file.lastIndexOf('.')));
+				while (stream.hasNext()) {
+					DomainEventMessage message = stream.next();
+					for (AnnotationEventListenerAdapter adapter : adapters) {
+						adapter.handle(message);
+					}
+				}
 			}
 		}
 	}
